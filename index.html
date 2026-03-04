@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ucuş + Sunum</title>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+<style>
+/* ===================================================== */
+/* 🌍 GENEL */
+/* ===================================================== */
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#map {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  z-index: 1;
+  background: #000;
+}
+
+/* UI Katmanı */
+#ui-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ===================================================== */
+/* 🔍 ZOOM */
+/* ===================================================== */
+
+#zoom-level {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.8);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: Tahoma, sans-serif;
+  font-size: 11px;
+  z-index: 9999;
+  max-width: 90vw;
+  opacity: 1;
+  transition: opacity 0.6s ease;
+}
+
+#zoom-level.hide {
+  opacity: 0;
+}
+
+/* ===================================================== */
+/* ✨ SLOGAN */
+/* ===================================================== */
+
+#slogan {
+  position: absolute;
+  top: 230px;
+  left: 50%;
+
+  /* Başlangıç (JS bunu animasyonla değiştirecek) */
+  transform: translate(-50%, -80vh) scale(0.95);
+  opacity: 0;
+
+  font-family: 'Poppins', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #FFEA00;
+
+  z-index: 9999;
+
+  width: max-content;
+  max-width: 95vw;
+
+  text-align: left;
+
+  /* 🔥 Daha yumuşak geçiş */
+  transition:
+    transform 2.8s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 2.2s ease;
+}
+
+/* Dalga efekti */
+@keyframes waveColor {
+  0%   { color: #FFEA00; }
+  50%  { color: #000000; }
+  100% { color: #FFEA00; }
+}
+
+.wave {
+  display: inline-block;
+  animation: waveColor 4s ease-in-out;
+}
+
+/* ===================================================== */
+/* ℹ️ INFO PANEL */
+/* ===================================================== */
+
+#info-panel {
+  position: absolute;
+  bottom: 50px;
+  left: 15px;
+
+  width: 48vw;
+  max-width: 220px;
+
+  background: rgba(0,60,150,0.75);
+  color: #fff;
+
+  padding: 4px 8px;
+  border-radius: 4px;
+
+  font-family: Tahoma, sans-serif;
+  font-size: 10.5px;
+  line-height: 1.6;
+
+  backdrop-filter: blur(8px);
+
+  display: none;
+
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 1.2s ease, transform 1.2s cubic-bezier(0.22,1,0.36,1);
+}
+
+#info-panel.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.info-item {
+  opacity: 0;
+  transform: translateX(-10px);
+  animation: fadeInItem 0.6s forwards;
+  font-weight: 500;
+}
+
+@keyframes fadeInItem {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ===================================================== */
+/* 📞 CONTACT */
+/* ===================================================== */
+
+#contact-box {
+  position: absolute;
+  bottom: 150px;
+  left: 15px;
+
+  width: 48vw;
+  max-width: 220px;
+
+  background: rgba(0,0,0,0.8);
+  color: #fff;
+
+  padding: 6px 8px;
+  border-radius: 4px;
+
+  font-family: Tahoma, sans-serif;
+  font-size: 11px;
+  line-height: 1.5;
+
+  backdrop-filter: blur(6px);
+
+  display: none;
+
+  opacity: 0;
+  transform: translateY(15px);
+  transition: opacity 2.2s ease, transform 2.2s cubic-bezier(0.22,1,0.36,1);
+}
+
+#contact-box.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.contact-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ===================================================== */
+/* 🏆 HERO TITLE */
+/* ===================================================== */
+
+#hero-center-title {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+
+  font-family: 'Poppins', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+
+  color: #FFEA00;
+
+  opacity: 0;
+  transition: opacity 2s ease, transform 2s ease;
+
+  z-index: 99999;
+  pointer-events: none;
+
+  text-align: center;
+  max-width: 90vw;
+}
+
+/* ===================================================== */
+/* ✈ FLIGHT PANEL */
+/* ===================================================== */
+
+#flightPanel {
+  position: absolute;
+  top: 30px;
+  right: 15px;
+
+  max-width: 85vw;
+
+  background: linear-gradient(
+    135deg,
+    rgba(20,20,28,0.92),
+    rgba(10,10,15,0.88)
+  );
+
+  color: #e6e6e6;
+
+  padding: 8px 10px;
+  border-radius: 8px;
+
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+
+  backdrop-filter: blur(10px);
+
+  box-shadow:
+    0 8px 20px rgba(0,0,0,0.5),
+    inset 0 0 0 1px rgba(255,255,255,0.05);
+
+  opacity: 0;
+  transform: translateY(-40px) scale(0.98);
+
+  transition: opacity 2s ease,
+              transform 2s cubic-bezier(0.16,1,0.3,1);
+}
+
+#flightPanel div {
+  margin-bottom: 6px;
+}
+
+#flightPanel div:last-child {
+  margin-bottom: 0;
+}
+
+/* Vurgular */
+#distanceInfo { color: #4fd1c5; font-weight: 600; }
+#speedInfo    { color: #f6ad55; }
+#timeInfo     { color: #a0aec0; }
+
+
+
+#carousel{
+  position:absolute;
+  top:39%;
+  left:50%;
+  transform:translate(-50%, -50%) scale(0.85); /* 🔥 eklendi */
+  width:300px;
+  height:280px;
+
+  overflow:hidden;
+  border-radius:6px;
+
+  z-index:99999;
+
+  opacity:0;
+
+  transition:
+    opacity 1.4s cubic-bezier(0.22,1,0.36,1),
+    transform 1.4s cubic-bezier(0.22,1,0.36,1); /* 🔥 eklendi */
+}
+
+/* aktif hali */
+#carousel.show{
+  opacity:1;
+  transform:translate(-50%, -50%) scale(1); /* 🔥 premium giriş */
+}
+
+.carousel-img{
+  position:absolute;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+
+  opacity:0;
+  transition:opacity 1.2s ease;
+}
+
+.carousel-img.active{
+  opacity:1;
+}
+
+
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div id="ui-layer">
+  <div id="zoom-level">Zoom: 16.5</div>
+  <div id="slogan"></div>
+  <div id="contact-box"></div>
+  <div id="info-panel"></div>
+  <div id="hero-center-title"></div>
+  <div id="flightPanel">
+    <div style="font-weight:bold; margin-bottom:6px;">
+      ✈ Uçuş Bilgileri
+    </div>
+    <div id="distanceInfo">Mesafe: 0.00 km</div>
+    <div id="speedInfo">Hız: 0 km/h</div>
+    <div id="timeInfo">Süre: 0 sn</div>
+	<div id="altitudeInfo">İrtifa: ~0 m</div>
+  </div>
+  <div id="carousel">
+  <img src="images/1.jpeg" class="carousel-img active">
+  <img src="images/2.jpeg" class="carousel-img">
+</div>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoiZ2VvZ3JhcGh5cHJvZiIsImEiOiJjanYxb2t1ZG8wNGU1NGFsNXVkcnhzNmFpIn0.M3qCJK8FYa06B-Irc6FD-g';
+
+const sloganBox = document.getElementById("slogan");
+const infoPanel = document.getElementById("info-panel");
+const zoomBox = document.getElementById("zoom-level");
+
+let markers = [];
+
+const map = new mapboxgl.Map({
+  container: "map",
+  style: {
+    version: 8,
+    sources: {},
+    layers: [],
+    glyphs: 'https://api.mapbox.com/fonts/v1/mapbox/{fontstack}/{range}.pbf?access_token=' + mapboxgl.accessToken
+  },
+  center: [33.864379,38.396745],
+  zoom: 16.5,
+  pitch: 0,
+  bearing: 300,
+  attributionControl: false,
+  renderWorldCopies: false   // 🔥 EKLE
+});
+
+
+
+map.on("zoom",()=>{
+  zoomBox.innerHTML="Zoom: "+map.getZoom().toFixed(2);
+});
+
+let rotation;
+
+/* ---------------- ROUTE ---------------- */
+
+const route=[
+[33.864379,38.396745],
+[33.862653,38.397358],
+[33.81793,38.413084],
+];
+
+
+const yesilovaLabelGeoJSON = {
+  type: "FeatureCollection",
+  features: [
+    {
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [33.832623, 38.407549]
+      },
+      properties: {
+        title: "Yeşilova Kasabası"
+      }
+    }
+  ]
+};
+
+
+map.on("load",()=>{
+
+map.addSource('google-tiles', {
+        type: 'raster',
+        tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'],
+        tileSize: 256,
+        maxzoom: 24
+    });
+
+    // 🔹 Google raster layer ekleme
+    map.addLayer({
+	  id: 'google-tiles-layer',
+	  type: 'raster',
+	  source: 'google-tiles',
+	  paint: {
+		'raster-fade-duration': 0
+	  }
+	});
+
+/* PARSEL SOURCE */
+map.addSource("parsel", {
+  type: "geojson",
+  data: {
+    type: "FeatureCollection",
+    features: [{
+      type: "Feature",
+      properties: { 
+        "PARSEL_NO": "849 / 2" 
+      },
+      geometry: {
+        type: "MultiPolygon",
+        coordinates: [[[
+			[33.8178, 38.4131],
+            [33.8179, 38.4133],
+            [33.8177, 38.4134],
+            [33.8176, 38.4131],
+            [33.8178, 38.4131]
+        ]]]
+      }
+    }]
+  }
+});
+
+/* OUTLINE */
+map.addLayer({
+  id:"parsel-outline",
+  type:"line",
+  source:"parsel",
+  paint:{
+    "line-color":"#ff0000",
+    "line-width":4
+  }
+});
+
+/* MARKER */
+const corners = [
+  [33.81773,38.413195],
+];
+
+corners.forEach(coord=>{
+  const marker = new mapboxgl.Marker({
+    color:'#0000ff',
+    scale:0.8,
+    anchor:'center'
+  })
+  .setLngLat(coord)
+  .addTo(map);
+
+  markers.push(marker); // marker'ı kaydediyoruz
+});
+
+if (!map.getLayer('parcels-labels')) {
+  map.addLayer({
+    id: 'parcels-labels',
+    type: 'symbol',
+    source: 'parsel',
+    layout: {
+      'text-field': [
+        'concat',
+        ['get', 'PARSEL_NO'],
+      ],
+      'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+      'text-size': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        12, 10,
+        16, 10,
+        18, 10
+      ],
+      'text-anchor': 'center',
+      'text-allow-overlap': true
+    },
+    paint: {
+      'text-color': '#333333',          // Yumuşak koyu gri
+      'text-halo-color': '#ffffff',    // Beyaz kenarlık
+      'text-halo-width': 1.5,
+      'text-opacity': 0                // 👈 Başlangıçta görünmesin
+    }
+  });
+}
+
+
+/* YEŞİLOVA KASABASI LABEL */
+map.addSource("yesilova-label", {
+  type: "geojson",
+  data: yesilovaLabelGeoJSON
+});
+
+map.addLayer({
+  id: "yesilova-label-layer",
+  type: "symbol",
+  source: "yesilova-label",
+  layout: {
+    "text-field": ["get", "title"],
+    "text-size": 15,
+    "text-offset": [0, 1.5],
+    "text-anchor": "top"
+  },
+  paint: {
+  "text-color": "#FFF",
+  "text-halo-color": "rgba(0,0,0,0.9)",
+  "text-halo-width": 2,
+  "text-halo-blur": 0.8
+  }
+});
+
+
+setTimeout(() => {
+  startSmoothRoute();
+}, 7000); // 3000ms = 7 saniye
+
+
+setTimeout(() => {
+    document.getElementById("flightPanel").style.opacity = "1";
+    document.getElementById("flightPanel").style.transform = "translateY(0)";
+  }, 3000);
+});
+
+/* -------- SABİT HIZ -------- */
+
+function startSmoothRoute() {
+
+  const zoomElement = document.getElementById("zoom-level");
+  if (zoomElement) {
+    zoomElement.classList.add("hide");
+  }
+
+
+  const totalDuration = 33000;   
+  const climbDuration = 5000;    
+  const targetPitch = 35;   // Burayı değiştirerek genel pitch kontrolü yapabilirsin
+
+
+  let startTime = null;
+
+  const distanceElement = document.getElementById("distanceInfo");
+  const speedElement = document.getElementById("speedInfo");
+  const timeElement = document.getElementById("timeInfo");
+  const altitudeElement = document.getElementById("altitudeInfo");
+
+  // 🔥 ZOOM'A GÖRE İRTİFA
+  function getAltitudeFromZoom(zoom) {
+    return Math.max(30, Math.round(3000 / Math.pow(2, zoom - 10)));
+  }
+
+  function getDistance(a, b) {
+    const R = 6371000;
+    const toRad = x => x * Math.PI / 180;
+
+    const dLat = toRad(b[1] - a[1]);
+    const dLng = toRad(b[0] - a[0]);
+
+    const lat1 = toRad(a[1]);
+    const lat2 = toRad(b[1]);
+
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) *
+      Math.sin(dLng / 2) ** 2;
+
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  function getBearing(a, b) {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+  }
+
+  function smoothAngle(current, target) {
+    let diff = (target - current + 540) % 360 - 180;
+    return current + diff * 0.003;
+  }
+
+  let totalDistance = 0;
+  for (let i = 0; i < route.length - 1; i++) {
+    totalDistance += getDistance(route[i], route[i + 1]);
+  }
+
+  let bearing = map.getBearing();
+
+  function animate(time) {
+
+    if (!startTime) startTime = time;
+
+    const elapsed = time - startTime;
+    const t = Math.min(elapsed / totalDuration, 1);
+    const distanceCovered = t * totalDistance;
+
+    const speedMS = distanceCovered / (elapsed / 1000 || 1);
+    const speedKmh = speedMS * 3.6;
+
+    distanceElement.innerText =
+      "Mesafe: " + (distanceCovered / 1000).toFixed(2) + " km";
+
+    timeElement.innerText =
+      "Süre: " + Math.floor(elapsed / 1000) + " sn";
+
+    speedElement.innerText =
+      "Hız: " + speedKmh.toFixed(1) + " km/h";
+
+    // 🔥 ZOOM'A BAĞLI İRTİFA
+    const currentZoom = map.getZoom();
+    const zoomAltitude = getAltitudeFromZoom(currentZoom);
+
+    let climbAltitude;
+
+    if (elapsed < climbDuration) {
+      const progress = elapsed / climbDuration;
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      climbAltitude = zoomAltitude * easeOut;
+    } else {
+      climbAltitude = zoomAltitude;
+    }
+
+    altitudeElement.innerText =
+      "İrtifa: ~" + Math.round(climbAltitude) + " m";
+
+    // 📌 Rota ilerleme
+    let traveled = 0;
+
+    for (let i = 0; i < route.length - 1; i++) {
+
+      const segment = getDistance(route[i], route[i + 1]);
+
+      if (traveled + segment >= distanceCovered) {
+
+        const progress =
+          (distanceCovered - traveled) / segment;
+
+        const lng =
+          route[i][0] +
+          (route[i + 1][0] - route[i][0]) * progress;
+
+        const lat =
+          route[i][1] +
+          (route[i + 1][1] - route[i][1]) * progress;
+
+        const targetBearing =
+          getBearing(route[i], route[i + 1]);
+
+        bearing = smoothAngle(bearing, targetBearing);
+
+        // 🔥 PITCH YUMUŞAK GEÇİŞ
+        const pitchProgress = Math.min(elapsed / 6000, 1);
+		const newPitch = targetPitch * pitchProgress;
+
+        map.easeTo({
+          center: [lng, lat],
+          bearing: bearing,
+          pitch: newPitch,   // artık dinamik
+          zoom: currentZoom,
+          duration: 0
+        });
+
+        break;
+      }
+
+      traveled += segment;
+    }
+
+    if (elapsed < totalDuration) {
+      requestAnimationFrame(animate);
+    } else {
+
+      distanceElement.innerText =
+        "Mesafe: " + (totalDistance / 1000).toFixed(2) + " km";
+
+      speedElement.innerText = "Hız: 0 km/h";
+
+      startRotation();
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+/* -------- DÖNÜŞ + YAZILAR -------- */
+function startRotation() {
+
+  const geoCenter = [33.81773, 38.413195];
+
+  if (rotation) cancelAnimationFrame(rotation);
+
+  map.easeTo({
+    center: geoCenter,
+    zoom: 16.5,
+    duration: 6000,
+    pitch: 35
+  });
+
+  map.once("moveend", () => {
+
+    // 🔥 3 saniye bekle
+    setTimeout(() => {
+
+      // 📉 Flight panel kaybolsun
+      const panel = document.getElementById("flightPanel");
+      if (panel) {
+        panel.style.transition = "opacity 1s ease, transform 1s ease";
+        panel.style.opacity = "0";
+        panel.style.transform = "translateY(-10px)";
+      }
+
+      // ⏳ Panel tamamen kaybolsun diye kısa bekleme
+      setTimeout(() => {
+
+        // ✅ MARKER'LARI KALDIR
+        if (typeof markers !== "undefined") {
+          markers.forEach(marker => marker.remove());
+          markers = [];
+        }
+
+        // 🔄 Dönüş başlat
+        function spin() {
+          map.setBearing(map.getBearing() + 0.1);
+          rotation = requestAnimationFrame(spin);
+        }
+
+        spin();
+
+        // 📝 Yazılar
+        startTextFlow();	
+        showCenterTitle();
+        fadeInParcelLabel();
+
+      }, 1000);
+
+    }, 3000);
+
+  });
+}
+
+function fadeInParcelLabel() {
+
+  let opacity = 0;
+
+  const fade = setInterval(() => {
+    opacity += 0.05;
+
+    map.setPaintProperty(
+      'parcels-labels',
+      'text-opacity',
+      opacity
+    );
+
+    if (opacity >= 1) clearInterval(fade);
+
+  }, 60);
+}
+
+
+async function startTextFlow(){
+
+  const slogans = [
+    "️🟢 Yeşilova Kasabası",
+    "📍   Yeşilova Merkeze 3 Km",
+	"🔑  Anahtar Teslimi",
+	"🏠 110 m²",
+	"💰 Uygun Fiyat"  
+  ];
+
+  const sloganBox = document.getElementById("slogan");
+  const infoPanel = document.getElementById("info-panel");
+  const contact = document.getElementById("contact-box");
+
+  /* ===============================
+     1️⃣ ANA KUTU AYARLARI
+  =============================== */
+
+  sloganBox.style.display = "flex";
+  sloganBox.style.flexDirection = "column";
+  sloganBox.style.alignItems = "flex-start";   // 🔥 aynı hizalama
+  sloganBox.style.textAlign = "left";
+  sloganBox.style.gap = "2px";                 // 🔥 boşluk azaltıldı
+  sloganBox.style.whiteSpace = "normal";
+
+  sloganBox.style.transition = "none";
+  sloganBox.style.transform = "translate(-50%, -120vh) scale(0.9)";
+  sloganBox.style.opacity = "0";
+  sloganBox.innerHTML = "";
+
+  void sloganBox.offsetWidth;
+
+  sloganBox.style.transition =
+    "transform 2s cubic-bezier(0.22,1,0.36,1), opacity 1.8s ease";
+
+  sloganBox.style.opacity = "1";
+  sloganBox.style.transform = "translate(-50%, -75px) scale(1)";
+
+  /* ===============================
+     2️⃣ SATIR SATIR EKLEME
+  =============================== */
+
+  for(let i=0; i<slogans.length; i++){
+
+    const line = document.createElement("div");
+
+    // Harf animasyonu
+    const tempDiv = document.createElement("div");
+    tempDiv.innerHTML = slogans[i];
+    const plainText = tempDiv.textContent;
+
+    [...plainText].forEach((letter,index)=>{
+
+      if(letter===" "){
+        const space=document.createElement("span");
+        space.innerHTML="&nbsp;";
+        line.appendChild(space);
+        return;
+      }
+
+      const span=document.createElement("span");
+      span.textContent=letter;
+      span.style.display="inline-block";
+      span.classList.add("wave");
+      span.style.animationDelay=`${index*0.04}s`;
+      line.appendChild(span);
+    });
+
+    sloganBox.appendChild(line);
+
+    await new Promise(r=>setTimeout(r,2200)); // 🔥 daha akıcı
+  }
+
+  /* ===============================
+     3️⃣ YUMUŞAK SATIR SATIR KAÇIŞ
+  =============================== */
+
+  await new Promise(r=>setTimeout(r,600));
+
+  const lines = sloganBox.children;
+
+  for(let i=0; i<lines.length; i++){
+
+    lines[i].style.transition =
+      "transform 1.8s cubic-bezier(0.22,1,0.36,1), opacity 1.8s ease";
+
+    lines[i].style.transform =
+      "translate(-120%,120%) scale(0.92)";
+
+    lines[i].style.opacity = "0";
+
+    await new Promise(r=>setTimeout(r,150));
+  }
+
+  await new Promise(r=>setTimeout(r,1200));
+
+  /* ===============================
+     4️⃣ PANEL (YUMUŞAK)
+  =============================== */
+
+  infoPanel.style.display = "block";
+  infoPanel.innerHTML = "";
+
+  slogans.forEach(text=>{
+    const item = document.createElement("div");
+    item.classList.add("info-item");
+    item.innerHTML = "• " + text;
+    infoPanel.appendChild(item);
+  });
+
+  infoPanel.classList.add("show");
+
+  /* ===============================
+     5️⃣ CONTACT (DAHA SOFT)
+  =============================== */
+
+  contact.style.display = "block";
+
+  contact.innerHTML = `
+    <div style="font-weight:400; margin-bottom:4px;">
+      NETmax GAYRİMENKUL
+    </div>
+
+    <div class="contact-row">
+      <span style="color:#FFEA00;">📞</span>
+      <span>0532 200 04 01</span>
+    </div>
+
+    <div class="contact-row">
+      <span style="color:#FFEA00;">📞</span>
+      <span>0532 684 28 03</span>
+    </div>
+  `;
+
+  setTimeout(()=>{
+    contact.classList.add("show");
+  },100);
+  
+/* ===============================
+   🎞 CAROUSEL BAŞLAT
+=============================== */
+
+const carousel = document.getElementById("carousel");
+const images = document.querySelectorAll(".carousel-img");
+
+// Carousel başlangıçta gizli kalsın
+carousel.classList.remove("show");
+
+let currentIndex = 0;
+let intervalStarted = false;
+
+// 🎯 Contact'tan 2 saniye sonra çalıştır
+setTimeout(() => {
+
+  // 🎬 Premium giriş
+  carousel.classList.add("show");
+
+  // 🔄 İlk resmi aktif yap
+  images[currentIndex].classList.add("active");
+
+  // ⏱ Otomatik geçiş (sadece 1 kez başlasın)
+  if (!intervalStarted) {
+    intervalStarted = true;
+
+    setInterval(() => {
+
+      images[currentIndex].classList.remove("active");
+
+      currentIndex = (currentIndex + 1) % images.length;
+
+      images[currentIndex].classList.add("active");
+
+    }, 3000);
+
+  }
+
+}, 2000); // 👈 Contact'tan 2 sn sonra
+
+}
+
+
+function showCenterTitle(){
+
+  const title = document.getElementById("hero-center-title");
+
+  const text = "Satılık Ev";
+  title.innerHTML = "";
+
+  // Harf animasyonu
+  [...text].forEach((letter, index) => {
+
+  const span = document.createElement("span");
+  span.style.display = "inline-block";
+  span.style.animation = `letterWave 4s ease-in-out ${index * 0.2}s infinite`;
+
+	if (letter === " ") {
+    span.innerHTML = "&nbsp;";   // 🔥 boşluğu görünür yap
+	} else {
+    span.textContent = letter;
+	}
+
+	title.appendChild(span);
+
+	});
+
+  // Göster
+  title.style.opacity = 1;
+  title.style.transform = "translate(-50%, -50%) scale(1)";
+}
+
+// Sayfa yüklenince gizle
+window.addEventListener("load", () => {
+  document.getElementById("hero-center-title").style.opacity = 0;
+});
+
+</script>
+
+</body>
+</html>
