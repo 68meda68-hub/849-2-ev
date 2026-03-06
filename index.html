@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ucuş + Sunum</title>
+<title>849-2 Parsel Ucuş + Sunum</title>
 
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
@@ -389,8 +389,7 @@ let rotation;
 
 const route=[
 [33.864379,38.396745],
-[33.862653,38.397358],
-[33.81793,38.413084],
+[33.817946,38.413113],
 ];
 
 
@@ -545,12 +544,54 @@ setTimeout(() => {
 
 
 setTimeout(() => {
-    document.getElementById("flightPanel").style.opacity = "1";
-    document.getElementById("flightPanel").style.transform = "translateY(0)";
-  }, 3000);
+
+  const panel = document.getElementById("flightPanel");
+  if (panel) {
+    panel.style.opacity = "1";
+    panel.style.transform = "translateY(0)";
+  }
+
+  // 🚁 DRONE DA AYNI ANDA GELSİN
+  if (!droneMarker) {
+
+    const droneEl = document.createElement("img");
+    droneEl.src = "images/drone_2.png";
+    droneEl.style.width = "70px";
+    droneEl.style.height = "70px";
+    droneEl.style.opacity = "0";
+    droneEl.style.transition = "opacity 1.2s ease";
+    droneEl.style.pointerEvents = "none";
+
+    droneMarker = new mapboxgl.Marker({
+      element: droneEl,
+      anchor: "center",
+	  rotationAlignment: "map"
+    })
+      .setLngLat(route[0])
+      .addTo(map);
+	  
+	// 🚀 BURASI KRİTİK
+	  const initialBearing = (Math.atan2(
+	  route[1][0] - route[0][0],
+	  route[1][1] - route[0][1]
+	) * 180 / Math.PI + 360) % 360;
+
+	droneMarker.setRotation(initialBearing);
+
+    // Panel ile senkron fade-in
+    setTimeout(() => {
+      droneEl.style.opacity = "1";
+    }, 100);
+  }
+
+}, 3000);
+
+
 });
 
 /* -------- SABİT HIZ -------- */
+let droneMarker = null;
+let currentDroneRotation = null;
 
 function startSmoothRoute() {
 
@@ -571,6 +612,8 @@ function startSmoothRoute() {
   const speedElement = document.getElementById("speedInfo");
   const timeElement = document.getElementById("timeInfo");
   const altitudeElement = document.getElementById("altitudeInfo");
+
+  // =========================
 
   // 🔥 ZOOM'A GÖRE İRTİFA
   function getAltitudeFromZoom(zoom) {
@@ -611,7 +654,7 @@ function startSmoothRoute() {
     totalDistance += getDistance(route[i], route[i + 1]);
   }
 
-  let bearing = map.getBearing();
+  
 
   function animate(time) {
 
@@ -670,10 +713,7 @@ function startSmoothRoute() {
           route[i][1] +
           (route[i + 1][1] - route[i][1]) * progress;
 
-        const targetBearing =
-          getBearing(route[i], route[i + 1]);
-
-        bearing = smoothAngle(bearing, targetBearing);
+        const targetBearing = getBearing(route[i], route[i + 1]);
 
         // 🔥 PITCH YUMUŞAK GEÇİŞ
         const pitchProgress = Math.min(elapsed / 6000, 1);
@@ -681,11 +721,35 @@ function startSmoothRoute() {
 
         map.easeTo({
           center: [lng, lat],
-          bearing: bearing,
+        
           pitch: newPitch,   // artık dinamik
           zoom: currentZoom,
           duration: 0
         });
+		
+	// 🚁 DRONE GÜNCELLEME
+	if (droneMarker) {
+
+	  const targetRotation = getBearing(
+		route[i],
+		route[i + 1]
+	  );
+
+	  // İlk değer ataması (sadece bir kere)
+	  if (currentDroneRotation === null) {
+		currentDroneRotation = targetRotation;
+	  } else {
+
+		let diff = (targetRotation - currentDroneRotation + 540) % 360 - 180;
+		currentDroneRotation += diff * 0.03;
+
+	  }
+
+	  droneMarker
+		.setLngLat([lng, lat])
+		.setRotation(currentDroneRotation);
+
+	}
 
         break;
       }
@@ -725,42 +789,54 @@ function startRotation() {
 
   map.once("moveend", () => {
 
-    // 🔥 3 saniye bekle
+    // 🎯 PANEL + DRONE AYNI ANDA YAVAŞ KAYBOLSUN
+
     setTimeout(() => {
 
-      // 📉 Flight panel kaybolsun
+      // 🔥 Ortak yavaş geçiş süresi
+      const fadeDuration = 3000;
+
+      // 📉 Flight panel
       const panel = document.getElementById("flightPanel");
       if (panel) {
-        panel.style.transition = "opacity 1s ease, transform 1s ease";
+        panel.style.transition = `opacity ${fadeDuration}ms ease, transform ${fadeDuration}ms ease`;
         panel.style.opacity = "0";
-        panel.style.transform = "translateY(-10px)";
+        panel.style.transform = "translateY(-20px)";
       }
 
-      // ⏳ Panel tamamen kaybolsun diye kısa bekleme
-      setTimeout(() => {
+      // 🚁 Drone
+      if (droneMarker) {
 
-        // ✅ MARKER'LARI KALDIR
-        if (typeof markers !== "undefined") {
-          markers.forEach(marker => marker.remove());
-          markers = [];
-        }
+        const el = droneMarker.getElement();
+        el.style.transition = `opacity ${fadeDuration}ms ease`;
+        el.style.opacity = "0";
 
-        // 🔄 Dönüş başlat
-        function spin() {
-          map.setBearing(map.getBearing() + 0.1);
-          rotation = requestAnimationFrame(spin);
-        }
+        // Süre bitince tamamen kaldır
+        setTimeout(() => {
+          droneMarker.remove();
+          droneMarker = null;
+        }, fadeDuration);
+      }
 
-        spin();
+      // 🧹 Diğer marker'lar
+      if (typeof markers !== "undefined") {
+        markers.forEach(marker => marker.remove());
+        markers = [];
+      }
 
-        // 📝 Yazılar
-        startTextFlow();	
-        showCenterTitle();
-        fadeInParcelLabel();
+      // 🔄 Harita dönüş başlat
+      function spin() {
+        map.setBearing(map.getBearing() + 0.1);
+        rotation = requestAnimationFrame(spin);
+      }
 
-      }, 1000);
+      spin();
 
-    }, 3000);
+      startTextFlow();
+      showCenterTitle();
+      fadeInParcelLabel();
+
+    }, 500); // küçük senkron gecikme
 
   });
 }
@@ -773,10 +849,10 @@ function fadeInParcelLabel() {
     opacity += 0.05;
 
     map.setPaintProperty(
-      'parcels-labels',
-      'text-opacity',
-      opacity
-    );
+	  'parcels-labels',
+	  'text-opacity',
+	  Math.min(opacity, 1)
+	);
 
     if (opacity >= 1) clearInterval(fade);
 
