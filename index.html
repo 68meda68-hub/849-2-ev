@@ -281,44 +281,67 @@ body {
 #speedInfo    { color: #f6ad55; }
 #timeInfo     { color: #a0aec0; }
 
-
+/* ============================= */
+/* 🎞️ CAROUSEL ANA KAPSAYICI */
+/* ============================= */
 
 #carousel{
   position:absolute;
   top:39%;
   left:50%;
-  transform:translate(-50%, -50%) scale(0.85); /* 🔥 eklendi */
+
+  /* Ortalama + küçük başlangıç ölçeği */
+  transform:translate(-50%, -50%) scale(0.85);
+
   width:300px;
   height:280px;
 
-  overflow:hidden;
-  border-radius:6px;
+  overflow:hidden;            /* taşan kısımları gizler */
+  border-radius:6px;          /* hafif yuvarlak köşe */
 
   z-index:99999;
 
   opacity:0;
 
+  /* Yumuşak giriş animasyonu */
   transition:
     opacity 1.4s cubic-bezier(0.22,1,0.36,1),
-    transform 1.4s cubic-bezier(0.22,1,0.36,1); /* 🔥 eklendi */
+    transform 1.4s cubic-bezier(0.22,1,0.36,1);
+
+  /* 🔥 PREMIUM SHADOW */
+  box-shadow:
+    0 10px 25px rgba(0,0,0,0.35),   /* dış gölge */
+    0 0 40px rgba(0,0,0,0.15);      /* yumuşak yayılım */
 }
 
-/* aktif hali */
+/* ============================= */
+/* 🎬 AKTİF HAL */
+/* ============================= */
+
 #carousel.show{
   opacity:1;
-  transform:translate(-50%, -50%) scale(1); /* 🔥 premium giriş */
+
+  /* Tam boyuta geçiş */
+  transform:translate(-50%, -50%) scale(1);
 }
+
+/* ============================= */
+/* 🖼️ RESİMLER */
+/* ============================= */
 
 .carousel-img{
   position:absolute;
   width:100%;
   height:100%;
-  object-fit:cover;
+
+  object-fit:cover;  /* görüntü oranını korur */
 
   opacity:0;
+
   transition:opacity 1.2s ease;
 }
 
+/* Aktif resim */
 .carousel-img.active{
   opacity:1;
 }
@@ -1079,3 +1102,4 @@ window.addEventListener("load", () => {
 
 </body>
 </html>
+
