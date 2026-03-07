@@ -281,6 +281,7 @@ body {
 #speedInfo    { color: #f6ad55; }
 #timeInfo     { color: #a0aec0; }
 
+
 /* ============================= */
 /* 🎞️ CAROUSEL ANA KAPSAYICI */
 /* ============================= */
@@ -365,7 +366,7 @@ body {
       ✈ Uçuş Bilgileri
     </div>
     <div id="distanceInfo">Mesafe: 0.00 km</div>
-    <div id="speedInfo">Hız: 0 km/h</div>
+    <div id="speedInfo">Hız: 0 m/s</div>
     <div id="timeInfo">Süre: 0 sn</div>
 	<div id="altitudeInfo">İrtifa: ~0 m</div>
   </div>
@@ -412,7 +413,7 @@ let rotation;
 
 const route=[
 [33.864379,38.396745],
-[33.817946,38.413113],
+[33.817946,38.413113]
 ];
 
 
@@ -495,7 +496,7 @@ const corners = [
 corners.forEach(coord=>{
   const marker = new mapboxgl.Marker({
     color:'#0000ff',
-    scale:0.8,
+    scale:0.5,
     anchor:'center'
   })
   .setLngLat(coord)
@@ -616,18 +617,20 @@ setTimeout(() => {
 let droneMarker = null;
 let currentDroneRotation = null;
 
+// Gerçek hız için
+let lastSpeedTime = null;
+let lastSpeedPosition = null;
+
 function startSmoothRoute() {
 
   const zoomElement = document.getElementById("zoom-level");
-  if (zoomElement) {
-    zoomElement.classList.add("hide");
-  }
+  if (zoomElement) zoomElement.classList.add("hide");
 
+  const totalDuration = 35000;
+  const climbDuration = 4000;
+  const targetPitch = 35;
 
-  const totalDuration = 33000;   
-  const climbDuration = 5000;    
-  const targetPitch = 35;   // Burayı değiştirerek genel pitch kontrolü yapabilirsin
-
+  const WAIT_TIME = 4000; // ✅ ilk 4 saniye bekleme
 
   let startTime = null;
 
@@ -636,9 +639,9 @@ function startSmoothRoute() {
   const timeElement = document.getElementById("timeInfo");
   const altitudeElement = document.getElementById("altitudeInfo");
 
-  // =========================
+  lastSpeedTime = null;
+  lastSpeedPosition = null;
 
-  // 🔥 ZOOM'A GÖRE İRTİFA
   function getAltitudeFromZoom(zoom) {
     return Math.max(30, Math.round(3000 / Math.pow(2, zoom - 10)));
   }
@@ -667,39 +670,98 @@ function startSmoothRoute() {
     return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
   }
 
-  function smoothAngle(current, target) {
-    let diff = (target - current + 540) % 360 - 180;
-    return current + diff * 0.003;
-  }
-
   let totalDistance = 0;
   for (let i = 0; i < route.length - 1; i++) {
     totalDistance += getDistance(route[i], route[i + 1]);
   }
 
-  
+  const averageSpeedMS = totalDistance / (totalDuration / 1000);
+  const MAX_SPEED_MS = averageSpeedMS;
 
   function animate(time) {
 
     if (!startTime) startTime = time;
 
     const elapsed = time - startTime;
-    const t = Math.min(elapsed / totalDuration, 1);
+
+    // =========================
+    // 1️⃣ İLK 4 SANİYE: SADECE İRTİFA
+    // =========================
+
+		if (elapsed < WAIT_TIME) {
+		
+		// 🎯 Pitch’i 0 → targetPitch yap
+		  const progress = elapsed / WAIT_TIME;
+		  const ease = 1 - Math.pow(1 - progress, 3); // yumuşak geçiş
+		  const newPitch = targetPitch * ease;
+
+		  map.setPitch(newPitch);
+
+		  // İrtifa güncelle
+		  updateClimb(elapsed);
+
+		  // 🔥 PANEL ÇALIŞSIN
+		  timeElement.innerText =
+			"Süre: " + Math.floor(elapsed / 1000) + " sn";
+
+		  distanceElement.innerText =
+			"Mesafe: 0.00 km";
+
+		  speedElement.innerText =
+			"Hız: 0 m/s";
+
+		  requestAnimationFrame(animate);
+		  return;
+		}
+
+    // =========================
+    // ZAMAN ORANI (YAVAŞLAMA YOK)
+    // =========================
+    let t = (elapsed - WAIT_TIME) / (totalDuration - WAIT_TIME);
+    t = Math.min(t, 1);
+
     const distanceCovered = t * totalDistance;
 
-    const speedMS = distanceCovered / (elapsed / 1000 || 1);
-    const speedKmh = speedMS * 3.6;
+    // =========================
+    // HIZ HESABI
+    // =========================
+    if (lastSpeedTime !== null && lastSpeedPosition && droneMarker) {
 
+      const currentPos = droneMarker.getLngLat().toArray();
+
+      const dt = (time - lastSpeedTime) / 1000;
+
+      if (dt > 0) {
+
+        const distance = getDistance(lastSpeedPosition, currentPos);
+        let speedMS = distance / dt; // gerçek hız
+
+        // ✅ maksimum 20 m/s limit
+        if (speedMS > 20) speedMS = 20;
+
+        speedElement.innerText =
+          "Hız: " + speedMS.toFixed(1) + " m/s";
+      }
+    }
+
+    if (droneMarker) {
+      lastSpeedPosition = droneMarker.getLngLat().toArray();
+    }
+
+    lastSpeedTime = time;
+
+    // =========================
+    // MESAFE / ZAMAN
+    // =========================
     distanceElement.innerText =
       "Mesafe: " + (distanceCovered / 1000).toFixed(2) + " km";
 
     timeElement.innerText =
       "Süre: " + Math.floor(elapsed / 1000) + " sn";
 
-    speedElement.innerText =
-      "Hız: " + speedKmh.toFixed(1) + " km/h";
-
-    // 🔥 ZOOM'A BAĞLI İRTİFA
+    // =========================
+    // İRTİFA
+    // =========================
     const currentZoom = map.getZoom();
     const zoomAltitude = getAltitudeFromZoom(currentZoom);
 
@@ -716,7 +778,9 @@ function startSmoothRoute() {
     altitudeElement.innerText =
       "İrtifa: ~" + Math.round(climbAltitude) + " m";
 
-    // 📌 Rota ilerleme
+    // =========================
+    // ROTA
+    // =========================
     let traveled = 0;
 
     for (let i = 0; i < route.length - 1; i++) {
@@ -736,43 +800,34 @@ function startSmoothRoute() {
           route[i][1] +
           (route[i + 1][1] - route[i][1]) * progress;
 
-        const targetBearing = getBearing(route[i], route[i + 1]);
-
-        // 🔥 PITCH YUMUŞAK GEÇİŞ
-        const pitchProgress = Math.min(elapsed / 6000, 1);
-		const newPitch = targetPitch * pitchProgress;
-
         map.easeTo({
           center: [lng, lat],
-        
-          pitch: newPitch,   // artık dinamik
+          pitch: targetPitch,
           zoom: currentZoom,
           duration: 0
         });
-		
-	// 🚁 DRONE GÜNCELLEME
-	if (droneMarker) {
 
-	  const targetRotation = getBearing(
-		route[i],
-		route[i + 1]
-	  );
+        if (droneMarker) {
 
-	  // İlk değer ataması (sadece bir kere)
-	  if (currentDroneRotation === null) {
-		currentDroneRotation = targetRotation;
-	  } else {
+          const targetRotation = getBearing(
+            route[i],
+            route[i + 1]
+          );
 
-		let diff = (targetRotation - currentDroneRotation + 540) % 360 - 180;
-		currentDroneRotation += diff * 0.03;
+          if (currentDroneRotation === null) {
+            currentDroneRotation = targetRotation;
+          } else {
 
-	  }
+            let diff =
+              (targetRotation - currentDroneRotation + 540) % 360 - 180;
 
-	  droneMarker
-		.setLngLat([lng, lat])
-		.setRotation(currentDroneRotation);
+            currentDroneRotation += diff * 0.05;
+          }
 
-	}
+          droneMarker
+            .setLngLat([lng, lat])
+            .setRotation(currentDroneRotation);
+        }
 
         break;
       }
@@ -780,23 +835,40 @@ function startSmoothRoute() {
       traveled += segment;
     }
 
-    if (elapsed < totalDuration) {
+    // =========================
+    // BİTİŞ
+    // =========================
+    if (t < 1) {
       requestAnimationFrame(animate);
     } else {
-
-      distanceElement.innerText =
-        "Mesafe: " + (totalDistance / 1000).toFixed(2) + " km";
-
-      speedElement.innerText = "Hız: 0 km/h";
+	
+      speedElement.innerText = "Hız: 0 m/s";
 
       startRotation();
     }
   }
 
+  function updateClimb(elapsed) {
+
+    const currentZoom = map.getZoom();
+    const zoomAltitude = getAltitudeFromZoom(currentZoom);
+
+    const progress = Math.min(elapsed / climbDuration, 1);
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+
+    const climbAltitude = zoomAltitude * easeOut;
+
+    altitudeElement.innerText =
+      "İrtifa: ~" + Math.round(climbAltitude) + " m";
+  }
+
   requestAnimationFrame(animate);
 }
 
-/* -------- DÖNÜŞ + YAZILAR -------- */
+
+
+/* -------- 360° DÖNÜŞ -------- */
+
 function startRotation() {
 
   const geoCenter = [33.81773, 38.413195];
@@ -812,56 +884,102 @@ function startRotation() {
 
   map.once("moveend", () => {
 
-    // 🎯 PANEL + DRONE AYNI ANDA YAVAŞ KAYBOLSUN
+  // =========================
+  // MARKER FADE
+  // =========================
+  if (typeof markers !== "undefined") {
 
-    setTimeout(() => {
+    markers.forEach(marker => {
+      const el = marker.getElement();
 
-      // 🔥 Ortak yavaş geçiş süresi
+      if (el) {
+        el.style.transition = "opacity 1500ms ease";
+        el.style.opacity = "0";
+      }
+
+      setTimeout(() => {
+        marker.remove();
+      }, 1500);
+
+    });
+
+    markers = [];
+  }
+
+  // =========================
+  // DRONE SPIN BAŞLANGICI
+  // =========================
+
+  let turned = 0;
+  const step = 0.2;  // 🔥 DÖNÜŞ HIZI BURASI
+
+  // Drone’un mevcut rotasyonunu koru
+  let droneStartRotation = 0;
+
+  if (droneMarker) {
+    droneStartRotation = currentDroneRotation ?? map.getBearing();
+  }
+
+  function spin() {
+
+    // Harita döner
+    const newBearing = map.getBearing() + step;
+    map.setBearing(newBearing);
+
+    // Drone harita ile senkron, ama başlangıç yönünden devam eder
+    if (droneMarker) {
+      droneMarker.setRotation(droneStartRotation + turned);
+    }
+
+    turned += step;
+
+    if (turned < 360) {
+
+      rotation = requestAnimationFrame(spin);
+
+    } else {
+
+      // =========================
+      // DÖNÜŞ BİTTİ
+      // =========================
+
       const fadeDuration = 3000;
 
-      // 📉 Flight panel
       const panel = document.getElementById("flightPanel");
       if (panel) {
-        panel.style.transition = `opacity ${fadeDuration}ms ease, transform ${fadeDuration}ms ease`;
+        panel.style.transition =
+          `opacity ${fadeDuration}ms ease, transform ${fadeDuration}ms ease`;
         panel.style.opacity = "0";
         panel.style.transform = "translateY(-20px)";
       }
 
-      // 🚁 Drone
       if (droneMarker) {
 
         const el = droneMarker.getElement();
         el.style.transition = `opacity ${fadeDuration}ms ease`;
         el.style.opacity = "0";
 
-        // Süre bitince tamamen kaldır
         setTimeout(() => {
           droneMarker.remove();
           droneMarker = null;
         }, fadeDuration);
       }
 
-      // 🧹 Diğer marker'lar
-      if (typeof markers !== "undefined") {
-        markers.forEach(marker => marker.remove());
-        markers = [];
-      }
+      setTimeout(() => {
 
-      // 🔄 Harita dönüş başlat
-      function spin() {
-        map.setBearing(map.getBearing() + 0.1);
-        rotation = requestAnimationFrame(spin);
-      }
+        startTextFlow();
+        showCenterTitle();
+        fadeInParcelLabel();
 
-      spin();
+      }, 2000);
 
-      startTextFlow();
-      showCenterTitle();
-      fadeInParcelLabel();
+    }
+  }
 
-    }, 500); // küçük senkron gecikme
+  spin();
 
-  });
+});
+
 }
 
 function fadeInParcelLabel() {
@@ -1102,4 +1220,3 @@ window.addEventListener("load", () => {
 
 </body>
 </html>
-
